@@ -364,3 +364,5 @@ The backend runs Node.js with Socket.IO and requires persistent WebSocket connec
 
 This project is licensed under the [MIT License](LICENSE).
 Feel free to customize, contribute, and deploy for educational institutions, academies, and personal tutoring.
+#   D i g i t a l - C l a s s R o o m  
+ 

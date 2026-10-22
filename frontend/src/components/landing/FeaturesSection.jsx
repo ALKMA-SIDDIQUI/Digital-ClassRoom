@@ -1,136 +1,129 @@
-import { Cpu, Zap, Shield, FolderUp, Download, Activity, Sparkles } from "lucide-react";
+import { PenTool, Zap, MessageSquare, Users, Download, ShieldCheck, Lock, Share2 } from "lucide-react";
 
 export default function FeaturesSection() {
   const features = [
     {
-      title: "AI Model Orchestration & Vector Canvas",
+      title: "Interactive Whiteboard",
       description:
-        "High-performance vector rendering engine supporting fluid multi-tool drawing, geometric shapes, precision mathematical graphs, and high-DPI scaling.",
-      icon: Cpu,
-      badge: "Vector Core",
-      color: "from-cyan-500 to-blue-600",
-      borderGlow: "group-hover:border-cyan-500/50",
-      accent: "text-cyan-400",
-      bgLight: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-    },
-    {
-      title: "Real-Time Inference & Event Streaming",
-      description:
-        "Ultra-low latency WebSocket streaming with 0ms perceived lag. Intelligently batches strokes and element sync across hundreds of simultaneous participants.",
-      icon: Zap,
-      badge: "Socket.IO",
+        "High-performance vector canvas with fluid pen, precision eraser, geometric shapes (rectangles, circles, arrows), and text stamping tools.",
+      icon: PenTool,
+      badge: "Canvas Engine",
       color: "from-blue-500 to-indigo-600",
-      borderGlow: "group-hover:border-blue-500/50",
-      accent: "text-blue-400",
-      bgLight: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+      bgLight: "bg-blue-50 text-blue-600 border-blue-100",
     },
     {
-      title: "Workflow Automation & Educator Authority",
+      title: "Real-time Collaboration",
       description:
-        "Granular classroom controls. Teachers can lock canvas drawing for individual students, mute the chat section during lectures, and eject disruptive users.",
-      icon: Shield,
-      badge: "Governance",
+        "Powered by ultra-fast Socket.IO websockets. Live multi-user strokes, cursor movements, and element sync with 0ms perceived latency.",
+      icon: Zap,
+      badge: "Live Socket.IO",
       color: "from-violet-500 to-purple-600",
-      borderGlow: "group-hover:border-violet-500/50",
-      accent: "text-violet-400",
-      bgLight: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+      bgLight: "bg-violet-50 text-violet-600 border-violet-100",
     },
     {
-      title: "Observability & Live Presence Monitoring",
+      title: "Classroom Chat",
       description:
-        "Real-time participant presence tracking with live cursor broadcasting, active drawing indicators, and participant status telemetry.",
-      icon: Activity,
-      badge: "Telemetry",
+        "Integrated messaging stream so students can ask questions, engage in peer discussions, and receive real-time teacher announcements.",
+      icon: MessageSquare,
+      badge: "Messaging",
       color: "from-emerald-500 to-teal-600",
-      borderGlow: "group-hover:border-emerald-500/50",
-      accent: "text-emerald-400",
-      bgLight: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      bgLight: "bg-emerald-50 text-emerald-600 border-emerald-100",
     },
     {
-      title: "Secure 25MB Resource Hub Pipelines",
+      title: "Teacher & Student Roles",
       description:
-        "Direct-to-storage PDF and image pipelines powered by Supabase. Open handouts directly in browser tabs or preview diagrams with zoom and download.",
-      icon: FolderUp,
-      badge: "25MB Hub",
+        "Strict cryptographic role hierarchy. Teachers possess classroom administration authority, while students collaborate safely.",
+      icon: Users,
+      badge: "Role Access",
       color: "from-amber-500 to-orange-600",
-      borderGlow: "group-hover:border-amber-500/50",
-      accent: "text-amber-400",
-      bgLight: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      bgLight: "bg-amber-50 text-amber-600 border-amber-100",
     },
     {
-      title: "Scalable Infrastructure & High-Res Export",
+      title: "Save & Export (PNG)",
       description:
-        "PostgreSQL database with Row Level Security (RLS) and instant board export to crystal-clear PNG snapshots for student revision.",
+        "Download high-resolution PNG snapshots of the whiteboard at any moment for lesson archives, revision, and homework handouts.",
       icon: Download,
-      badge: "Enterprise",
-      color: "from-fuchsia-500 to-pink-600",
-      borderGlow: "group-hover:border-fuchsia-500/50",
-      accent: "text-fuchsia-400",
-      bgLight: "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20",
+      badge: "One-Click Export",
+      color: "from-rose-500 to-pink-600",
+      bgLight: "bg-rose-50 text-rose-600 border-rose-100",
+    },
+    {
+      title: "Secure Authentication",
+      description:
+        "Enterprise-grade Supabase session authentication with encrypted passwords and verified teacher invitation passkeys.",
+      icon: ShieldCheck,
+      badge: "PostgreSQL & RLS",
+      color: "from-blue-600 to-cyan-600",
+      bgLight: "bg-cyan-50 text-cyan-600 border-cyan-100",
+    },
+    {
+      title: "Board Lock & Teacher Controls",
+      description:
+        "Educators can pause chat, lock the board globally or per-individual student, and remove disruptive participants instantly.",
+      icon: Lock,
+      badge: "Full Authority",
+      color: "from-purple-600 to-pink-600",
+      bgLight: "bg-purple-50 text-purple-600 border-purple-100",
+    },
+    {
+      title: "Instant Classroom Sharing",
+      description:
+        "Teachers generate memorable 6-character room codes. Students paste the code to enter live collaborative lessons in seconds.",
+      icon: Share2,
+      badge: "Zero Friction",
+      color: "from-emerald-600 to-green-600",
+      bgLight: "bg-emerald-50 text-emerald-600 border-emerald-100",
     },
   ];
 
   return (
-    <section id="platform" className="py-24 md:py-32 bg-[#07090E] relative overflow-hidden">
-      {/* Subtle Ambient Radial Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 h-[500px] w-full max-w-6xl blur-[140px] opacity-20 pointer-events-none">
-        <div className="h-full w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 rounded-full" />
-      </div>
-
+    <section id="features" className="py-20 md:py-28 bg-[#F6F8FF]/60 border-t border-slate-200/70">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         
         {/* Section Heading */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-cyan-400 mb-3">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Commercial-Grade Platform Suite</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-            Engineered for High-Concurrency{" "}
-            <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-violet-400 bg-clip-text text-transparent">
-              Live Collaboration
-            </span>
+          <span className="text-xs sm:text-sm font-semibold tracking-wide text-[#315BFF] mb-2 block">
+            Commercial-Grade Feature Suite
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#101828]">
+            Everything You Need For Powerful Interactive Teaching
           </h2>
-          <p className="mt-4 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto">
-            A unified infrastructure stack designed for zero-latency whiteboarding, pedagogical authority, and enterprise security.
+          <p className="mt-3 text-sm sm:text-base text-[#53627A]">
+            Engineered with modern web standards, secure database architecture, and zero-latency real-time collaboration.
           </p>
         </div>
 
-        {/* 6 Feature Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* 8 Feature Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((feature, idx) => {
             const Icon = feature.icon;
             return (
               <div
                 key={idx}
-                className={`group relative rounded-2xl bg-[#0D111A]/80 p-7 border border-white/[0.08] hover:border-white/20 transition-all duration-300 flex flex-col justify-between backdrop-blur-md hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10 ${feature.borderGlow}`}
+                className="group relative rounded-2xl bg-white p-6 shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-200/90 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-5">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl border ${feature.bgLight}`}>
-                      <Icon className="h-5 w-5" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${feature.bgLight} group-hover:scale-105 transition`}>
+                      <Icon className="h-6 w-6" />
                     </div>
-                    <span className="font-mono text-[11px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
                       {feature.badge}
                     </span>
                   </div>
 
-                  <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition">
+                  <h3 className="text-base font-bold text-[#101828] mb-2 group-hover:text-[#315BFF] transition">
                     {feature.title}
                   </h3>
 
-                  <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed font-normal">
+                  <p className="text-xs sm:text-sm text-[#53627A] leading-relaxed">
                     {feature.description}
                   </p>
                 </div>
 
-                {/* Subtle Bottom Accent Indicator */}
-                <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400 group-hover:text-slate-300 transition">
-                  <span className="font-mono text-[11px]">System Ready</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 group-hover:animate-ping" />
-                    <span className="text-[11px] font-mono font-medium">99.99%</span>
-                  </div>
+                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-400 group-hover:text-[#315BFF] transition">
+                  <span>Learn more</span>
+                  <span>→</span>
                 </div>
               </div>
             );
