@@ -17,7 +17,7 @@ const isClientHosted =
 const useDirectSupabase = isClientHosted && !isRemoteBackend;
 
 export default function Dashboard({ onEnterRoom, onNavigate }) {
-  const { profile, user, signOut, accessToken, refreshProfile } = useAuth();
+  const { profile, user, signOut, accessToken, refreshProfile, updateTeacherPasskey } = useAuth();
 
   const isTeacher = profile?.role === "teacher";
   const isOfficialTeacher = Boolean(profile?.is_official_teacher && isTeacher);
@@ -43,8 +43,21 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
   const [loadingPromoted, setLoadingPromoted] = useState(false);
   const [selectedStudentToRevoke, setSelectedStudentToRevoke] = useState(null);
   const [revoking, setRevoking] = useState(false);
-  const [teacherPasskey, setTeacherPasskey] = useState(profile?.teacherPasskey || "");
+  const [teacherPasskey, setTeacherPasskey] = useState(
+    profile?.teacher_passkey || profile?.teacherPasskey || user?.user_metadata?.teacher_passkey || ""
+  );
   const [showPasskey, setShowPasskey] = useState(false);
+  const [isEditingPasskey, setIsEditingPasskey] = useState(false);
+  const [newPasskeyInput, setNewPasskeyInput] = useState("");
+  const [savingPasskey, setSavingPasskey] = useState(false);
+
+  useEffect(() => {
+    const activePass =
+      profile?.teacher_passkey || profile?.teacherPasskey || user?.user_metadata?.teacher_passkey;
+    if (activePass) {
+      setTeacherPasskey(activePass);
+    }
+  }, [profile, user]);
 
   // Notifications
   const [statusMsg, setStatusMsg] = useState("");
@@ -262,12 +275,57 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
     }
   };
 
-  // Handle Teacher Promotion with Server Passkey
+  // Handle Teacher Passkey Save / Update (Teacher only)
+  const handleSaveTeacherPasskey = async (e) => {
+    e?.preventDefault();
+    const clean = newPasskeyInput.trim();
+    if (!clean || clean.length < 3) {
+      notify("Teacher passkey must be at least 3 characters.", true);
+      return;
+    }
+    try {
+      setSavingPasskey(true);
+      if (updateTeacherPasskey) {
+        await updateTeacherPasskey(clean);
+      } else {
+        await supabase.auth.updateUser({
+          data: { teacher_passkey: clean },
+        });
+      }
+
+      // Also notify backend if connected
+      if (accessToken && !useDirectSupabase) {
+        try {
+          await fetch(`${SERVER_URL}/api/auth/teacher-passkey`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ teacherPasskey: clean }),
+          });
+        } catch {
+          // ignore backend fallback notice
+        }
+      }
+
+      setTeacherPasskey(clean);
+      setIsEditingPasskey(false);
+      setNewPasskeyInput("");
+      notify(`Teacher passkey updated successfully!`);
+    } catch (err) {
+      notify(err.message || "Failed to update teacher passkey", true);
+    } finally {
+      setSavingPasskey(false);
+    }
+  };
+
+  // Handle Teacher Promotion with Passkey
   const handlePromoteToTeacher = async (e) => {
     e.preventDefault();
     const cleanCode = promoCode.trim();
-    if (!cleanCode) {
-      notify("Please enter your teacher invitation passkey (TEACH_2026_COLAB_SECRET).", true);
+    if (!cleanCode || cleanCode.length < 3) {
+      notify("Please enter a valid teacher passkey (at least 3 characters).", true);
       return;
     }
 
@@ -275,18 +333,13 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
       setPromoting(true);
 
       if (useDirectSupabase && user?.id) {
-        const VALID_PASSKEY = "TEACH_2026_COLAB_SECRET";
-        if (cleanCode.toUpperCase() !== VALID_PASSKEY.toUpperCase()) {
-          throw new Error("Invalid teacher invitation passkey.");
-        }
-
         await supabase
           .from("profiles")
           .update({ role: "teacher" })
           .eq("id", user.id);
 
         await supabase.auth.updateUser({
-          data: { role: "teacher", is_promoted_student: true },
+          data: { role: "teacher", is_promoted_student: true, teacher_passkey: cleanCode },
         });
 
         notify("🎉 Verified successfully as Teacher! Classroom creation unlocked.");
@@ -584,70 +637,109 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
           )}
         </div>
 
-        {/* Official Teacher: Promoted Students Access Management Section */}
-        {isOfficialTeacher && (
-          <section className="rounded-2xl border border-purple-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-purple-100">
+        {/* Teacher Passkey Management & Student Permissions */}
+        {isTeacher && (
+          <section className="rounded-2xl border border-purple-200 bg-white p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-purple-100">
               <div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Teacher Access & Permission Control</h2>
-                </div>
+                <h2 className="text-lg font-bold text-slate-900">Teacher Passkey & Permissions</h2>
                 <p className="text-xs text-slate-600 mt-1">
-                  View all students who currently hold Teacher Control. As the official teacher, you have exclusive authority to individually revoke control from any student.
+                  Manage your personal teacher passkey. Share it with assistants or students to grant them teacher controls, and change it anytime.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={fetchPromotedStudents}
-                disabled={loadingPromoted}
-                className="text-xs font-semibold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 self-start sm:self-auto cursor-pointer"
-              >
-                {loadingPromoted ? "Refreshing..." : "↻ Refresh List"}
-              </button>
+              {isOfficialTeacher && (
+                <button
+                  type="button"
+                  onClick={fetchPromotedStudents}
+                  disabled={loadingPromoted}
+                  className="text-xs font-semibold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+                >
+                  {loadingPromoted ? "Refreshing..." : "↻ Refresh List"}
+                </button>
+              )}
             </div>
 
-            {/* Official Teacher Secret Passkey Display */}
-            {teacherPasskey && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4 mb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
-                      Your Teacher Invitation Passkey
-                    </span>
-                    <span className="rounded bg-purple-200/80 px-2 py-0.5 text-[10px] font-bold text-purple-800">
-                      Private Code
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Share this secret passkey only with students or assistants whom you want to grant teacher access.
-                  </p>
+            {/* Teacher Passkey Display & Edit */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
+                    Your Teacher Passkey / PIN
+                  </span>
+                  <span className="rounded bg-purple-200/80 px-2 py-0.5 text-[10px] font-bold text-purple-800">
+                    Custom Passkey
+                  </span>
                 </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  Share this secret passkey with students or assistants whom you want to grant teacher access.
+                </p>
+              </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+              {!isEditingPasskey ? (
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                   <div className="flex items-center rounded-lg border border-purple-200 bg-white px-3 py-1.5 font-mono text-sm font-bold text-purple-900 shadow-xs tracking-wider">
-                    {showPasskey ? teacherPasskey : "••••••••••••••••••••••"}
+                    {teacherPasskey ? (showPasskey ? teacherPasskey : "••••••••••••") : "(Not set yet)"}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasskey(!showPasskey)}
-                    className="rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition shadow-xs cursor-pointer"
-                    title={showPasskey ? "Hide passkey" : "Show passkey"}
-                  >
-                    {showPasskey ? "Hide" : "Show"}
-                  </button>
+                  {teacherPasskey && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPasskey(!showPasskey)}
+                      className="rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition shadow-xs cursor-pointer"
+                      title={showPasskey ? "Hide passkey" : "Show passkey"}
+                    >
+                      {showPasskey ? "Hide" : "Show"}
+                    </button>
+                  )}
+                  {teacherPasskey && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(teacherPasskey);
+                        notify("Teacher passkey copied to clipboard!");
+                      }}
+                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 transition shadow-xs cursor-pointer"
+                    >
+                      Copy
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard?.writeText(teacherPasskey);
-                      notify("Teacher passkey copied to clipboard!");
+                      setNewPasskeyInput(teacherPasskey || "");
+                      setIsEditingPasskey(true);
                     }}
-                    className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 transition shadow-xs cursor-pointer"
+                    className="rounded-lg border border-purple-300 bg-purple-100 px-3 py-1.5 text-xs font-bold text-purple-800 hover:bg-purple-200 transition shadow-xs cursor-pointer"
                   >
-                    Copy
+                    ✏️ Edit Passkey
                   </button>
                 </div>
-              </div>
-            )}
+              ) : (
+                <form onSubmit={handleSaveTeacherPasskey} className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter custom passkey (min 3 chars)"
+                    value={newPasskeyInput}
+                    onChange={(e) => setNewPasskeyInput(e.target.value)}
+                    className="rounded-lg border border-purple-300 bg-white px-3 py-1.5 text-xs font-mono font-bold text-purple-900 focus:border-purple-600 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingPasskey}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-xs disabled:opacity-60 cursor-pointer"
+                  >
+                    {savingPasskey ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPasskey(false)}
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
+            </div>
 
             {loadingPromoted ? (
               <div className="py-8 text-center text-sm text-slate-500">Loading student permissions...</div>

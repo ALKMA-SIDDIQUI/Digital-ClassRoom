@@ -293,18 +293,19 @@ export default function AuthModal({ initialMode = "signin", onClose }) {
             {role === "teacher" && (
               <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3">
                 <label className="block text-xs font-semibold text-violet-900 uppercase mb-1.5">
-                  Teacher Invitation Passkey
+                  Set Your Teacher Passkey / PIN
                 </label>
                 <input
                   type="password"
                   required
+                  minLength={3}
                   value={teacherPasscode}
                   onChange={(e) => setTeacherPasscode(e.target.value)}
-                  placeholder="Enter secret teacher passkey"
+                  placeholder="Set your own passkey (e.g. Math2026, Teach@99)"
                   className="w-full rounded-lg border border-violet-300 bg-white p-2.5 text-sm font-mono focus:border-violet-600 focus:outline-none"
                 />
                 <p className="mt-1.5 text-[11px] text-violet-700">
-                  🔒 Authorized educators only. Passkey is provided by your school administrator.
+                  🔑 Choose any passkey of your choice to secure your teacher authority. You can view or change it anytime in your dashboard.
                 </p>
               </div>
             )}

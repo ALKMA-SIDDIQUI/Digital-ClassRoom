@@ -16,9 +16,7 @@ router.get("/me", authenticateToken, async (req, res) => {
     },
     profile: {
       ...req.profile,
-      teacherPasskey: req.profile?.is_official_teacher
-        ? process.env.TEACHER_INVITATION_CODE || "TEACH_2026_COLAB_SECRET"
-        : null,
+      teacherPasskey: req.user?.user_metadata?.teacher_passkey || req.profile?.teacher_passkey || null,
     },
   });
 });
@@ -29,19 +27,11 @@ router.get("/me", authenticateToken, async (req, res) => {
  */
 router.post("/verify-teacher-code", (req, res) => {
   const { invitationCode } = req.body;
-  const serverCode = process.env.TEACHER_INVITATION_CODE || "TEACH_2026_COLAB_SECRET";
 
-  if (!invitationCode || typeof invitationCode !== "string") {
+  if (!invitationCode || typeof invitationCode !== "string" || invitationCode.trim().length < 3) {
     return res.status(400).json({
       success: false,
-      message: "Teacher invitation passkey is required.",
-    });
-  }
-
-  if (invitationCode.trim().toLowerCase() !== serverCode.trim().toLowerCase()) {
-    return res.status(403).json({
-      success: false,
-      message: "Invalid teacher invitation passkey. Please check TEACHER_INVITATION_CODE in backend/.env",
+      message: "Teacher invitation passkey must be at least 3 characters.",
     });
   }
 
@@ -53,24 +43,17 @@ router.post("/verify-teacher-code", (req, res) => {
 
 /**
  * POST /api/auth/register-teacher
- * Validates a server-side teacher invitation passcode to promote user to teacher
+ * Promotes user to teacher using provided custom passkey
  */
 router.post("/register-teacher", authenticateToken, async (req, res) => {
   try {
     const { invitationCode } = req.body;
-    const serverCode = process.env.TEACHER_INVITATION_CODE || "TEACH_2026_COLAB_SECRET";
+    const cleanCode = invitationCode?.trim();
 
-    if (!invitationCode || typeof invitationCode !== "string") {
+    if (!cleanCode || cleanCode.length < 3) {
       return res.status(400).json({
         success: false,
-        message: "Teacher invitation passkey is required.",
-      });
-    }
-
-    if (invitationCode.trim().toLowerCase() !== serverCode.trim().toLowerCase()) {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid teacher invitation passkey. The correct passkey is: TEACH_2026_COLAB_SECRET",
+        message: "Teacher invitation passkey must be at least 3 characters.",
       });
     }
 
@@ -110,6 +93,7 @@ router.post("/register-teacher", authenticateToken, async (req, res) => {
             role: "teacher",
             is_promoted_student: true,
             is_official_teacher: false,
+            teacher_passkey: cleanCode,
             promoted_at: new Date().toISOString(),
           },
         });
@@ -133,6 +117,7 @@ router.post("/register-teacher", authenticateToken, async (req, res) => {
         role: "teacher",
         is_promoted_student: true,
         is_official_teacher: false,
+        teacher_passkey: cleanCode,
       },
     });
   } catch (error) {
@@ -140,6 +125,50 @@ router.post("/register-teacher", authenticateToken, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error processing teacher verification: " + error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/auth/teacher-passkey
+ * Allows a teacher to update their custom passkey anytime
+ */
+router.put("/teacher-passkey", authenticateToken, async (req, res) => {
+  try {
+    if (req.profile?.role !== "teacher") {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can update their teacher passkey.",
+      });
+    }
+
+    const { teacherPasskey } = req.body;
+    const clean = teacherPasskey?.trim();
+    if (!clean || clean.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Teacher passkey must be at least 3 characters.",
+      });
+    }
+
+    if (supabaseAdmin.auth?.admin?.updateUserById) {
+      await supabaseAdmin.auth.admin.updateUserById(req.user.id, {
+        user_metadata: {
+          ...(req.user.user_metadata || {}),
+          teacher_passkey: clean,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Teacher passkey updated successfully.",
+      teacherPasskey: clean,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update teacher passkey: " + error.message,
     });
   }
 });
@@ -189,9 +218,7 @@ router.get("/promoted-students", authenticateToken, async (req, res) => {
     return res.json({
       success: true,
       promotedStudents,
-      teacherPasskey: req.profile?.is_official_teacher
-        ? process.env.TEACHER_INVITATION_CODE || "TEACH_2026_COLAB_SECRET"
-        : null,
+      teacherPasskey: req.user?.user_metadata?.teacher_passkey || req.profile?.teacher_passkey || null,
     });
   } catch (error) {
     console.error("promoted-students error:", error.message);

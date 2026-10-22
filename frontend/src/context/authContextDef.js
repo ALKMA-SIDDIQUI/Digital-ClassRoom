@@ -11,6 +11,7 @@ export const AuthContext = createContext({
   signOut: async () => {},
   resetPassword: async () => {},
   updatePassword: async () => {},
+  updateTeacherPasskey: async () => {},
   refreshProfile: async () => {},
   setIsPasswordRecovery: () => {},
 });

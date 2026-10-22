@@ -89,11 +89,12 @@ function drawItem(ctx, item, width, height) {
 }
 
 export default function Whiteboard({ roomId, initialRole, classroomName, onLeaveRoom }) {
-  const { profile, accessToken } = useAuth();
+  const { profile, user, accessToken } = useAuth();
   const currentUsername = profile?.full_name || "User";
 
   const canvasRef = useRef(null);
   const socketRef = useRef(null);
+  const channelRef = useRef(null);
   const segmentsRef = useRef([]);
   const drawingRef = useRef(false);
   const startPointRef = useRef(null);
@@ -104,7 +105,7 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
   const [role, setRole] = useState(initialRole || "student");
   const isTeacher = role === "teacher";
-  const [status, setStatus] = useState("Connecting to classroom session...");
+  const [status, setStatus] = useState("🟢 Connecting to live classroom...");
   const [boardLocked, setBoardLocked] = useState(false);
 
   // Whiteboard Tools
@@ -278,128 +279,224 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
     }
   };
 
-  // Socket.IO Setup with Supabase JWT Auth Token
+  // 1. Supabase Realtime Cloud Sync (Zero-config WebSockets directly via Supabase)
   useEffect(() => {
-    const socket = io(SOCKET_URL, {
-      auth: {
-        token: accessToken,
+    let isMounted = true;
+    const channelName = `classroom:${roomId}`;
+    const channel = supabase.channel(channelName, {
+      config: {
+        broadcast: { ack: false, self: false },
+        presence: { key: user?.id || `user-${Math.random().toString(36).substring(2, 8)}` },
       },
-      transports: ["websocket", "polling"],
     });
+    channelRef.current = channel;
 
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setSocketClientId(socket.id);
-      setStatus("Connected to live classroom");
-      socket.emit("join-room", { roomId }, (response) => {
-        if (!response?.success) {
-          setStatus(response?.error || "Could not join room");
-          if (response?.error?.toLowerCase().includes("removed")) {
-            setKickedModal({ reason: response.error });
-          }
-          return;
-        }
-        setRole(response.role);
-        setBoardLocked(Boolean(response.boardLocked));
-        setIsChatDisabled(Boolean(response.isChatDisabled));
-        setIsIndividuallyLocked(Boolean(response.isIndividuallyLocked));
-        setStatus(`Active in ${response.roomId} as ${response.role}`);
-      });
-    });
-
-    socket.on("connect_error", (err) => {
-      setStatus(`Connection failed: ${err.message || "Server unreachable"}`);
-    });
-
-    socket.on("disconnect", () => {
-      setStatus("Disconnected from server");
-    });
-
-    socket.on("board-state", (items) => {
-      segmentsRef.current = Array.isArray(items) ? items : [];
+    // Drawing sync
+    channel.on("broadcast", { event: "draw" }, ({ payload }) => {
+      if (!isMounted || !payload) return;
+      segmentsRef.current.push(payload);
       setRevision((n) => n + 1);
     });
 
-    socket.on("draw", (item) => {
-      segmentsRef.current.push(item);
-      setRevision((n) => n + 1);
-    });
-
-    socket.on("board-cleared", () => {
+    // Clear board sync
+    channel.on("broadcast", { event: "clear-board" }, () => {
+      if (!isMounted) return;
       segmentsRef.current = [];
       setRevision((n) => n + 1);
     });
 
-    socket.on("participants-update", (updated) => {
-      setParticipants(updated);
-      // Auto-sync self lock status if user is in participant list
-      if (profile?.id) {
-        const me = updated.find((p) => p.userId === profile.id);
-        if (me && typeof me.isBoardLocked === "boolean") {
-          setIsIndividuallyLocked(me.isBoardLocked);
-        }
+    // Board state / undo sync
+    channel.on("broadcast", { event: "board-state" }, ({ payload }) => {
+      if (!isMounted) return;
+      segmentsRef.current = Array.isArray(payload) ? payload : [];
+      setRevision((n) => n + 1);
+    });
+
+    // Board lock sync
+    channel.on("broadcast", { event: "board-lock-state" }, ({ payload }) => {
+      if (!isMounted || typeof payload?.locked !== "boolean") return;
+      setBoardLocked(payload.locked);
+    });
+
+    // Individual student lock sync
+    channel.on("broadcast", { event: "student-lock-state" }, ({ payload }) => {
+      if (!isMounted || payload?.targetUserId !== user?.id) return;
+      if (typeof payload?.locked === "boolean") {
+        setIsIndividuallyLocked(payload.locked);
       }
     });
 
-    socket.on("chat-history", setMessages);
-    socket.on("chat-message", (message) => {
-      setMessages((old) => [...old, message].slice(-100));
+    // Chat status sync
+    channel.on("broadcast", { event: "chat-status-updated" }, ({ payload }) => {
+      if (!isMounted || typeof payload?.isChatDisabled !== "boolean") return;
+      setIsChatDisabled(payload.isChatDisabled);
     });
 
-    socket.on("chat-status-updated", ({ isChatDisabled: chatOff }) => {
-      setIsChatDisabled(Boolean(chatOff));
+    // Chat message sync
+    channel.on("broadcast", { event: "chat-message" }, ({ payload }) => {
+      if (!isMounted || !payload) return;
+      setMessages((prev) => [...prev, payload].slice(-100));
     });
 
-    socket.on("student-lock-state", ({ isBoardLocked }) => {
-      setIsIndividuallyLocked(Boolean(isBoardLocked));
+    // Cursor movement sync
+    channel.on("broadcast", { event: "cursor-update" }, ({ payload }) => {
+      if (!isMounted || !payload?.id || payload.id === user?.id) return;
+      setCursors((prev) => ({ ...prev, [payload.id]: payload }));
     });
 
-    socket.on("kicked-from-room", ({ reason }) => {
-      setKickedModal({ reason: reason || "You have been removed from the classroom session by the teacher." });
+    // Kicked from room sync
+    channel.on("broadcast", { event: "kicked-from-room" }, ({ payload }) => {
+      if (!isMounted || payload?.targetUserId !== user?.id) return;
+      setKickedModal({ reason: payload?.reason || "You have been removed from the classroom session by the teacher." });
     });
 
-    socket.on("cursor-update", (cursor) => {
-      setCursors((old) => ({ ...old, [cursor.id]: cursor }));
-    });
-
-    socket.on("cursor-left", ({ id }) => {
-      setCursors((old) => {
-        const next = { ...old };
-        delete next[id];
-        return next;
+    // Request board state from active participants
+    channel.on("broadcast", { event: "request-board-state" }, () => {
+      if (!isMounted || segmentsRef.current.length === 0) return;
+      channel.send({
+        type: "broadcast",
+        event: "board-state",
+        payload: segmentsRef.current,
       });
     });
 
-    socket.on("room-role", ({ role: roomRole, boardLocked: locked, isChatDisabled: chatOff, isIndividuallyLocked: userLocked }) => {
-      setRole(roomRole);
-      setBoardLocked(Boolean(locked));
-      if (typeof chatOff === "boolean") setIsChatDisabled(chatOff);
-      if (typeof userLocked === "boolean") setIsIndividuallyLocked(userLocked);
+    // Real-time Presence for Participant List
+    channel.on("presence", { event: "sync" }, () => {
+      if (!isMounted) return;
+      const state = channel.presenceState();
+      const onlineUsers = Object.values(state).flat().map((p) => ({
+        id: p.userId || p.id,
+        userId: p.userId,
+        username: p.username || "Participant",
+        role: p.role || "student",
+        isBoardLocked: Boolean(p.isBoardLocked),
+      }));
+      if (onlineUsers.length > 0) {
+        setParticipants(onlineUsers);
+      }
     });
 
-    socket.on("board-lock-state", ({ locked }) => {
-      setBoardLocked(Boolean(locked));
-    });
-
-    socket.on("board-error", ({ message }) => {
-      if (message) setStatus(message);
-    });
-
-    socket.on("resource-uploaded", (newResource) => {
-      setResources((old) => [newResource, ...old.filter((r) => r.id !== newResource.id)]);
-      setStatus(`📁 ${newResource.profiles?.full_name || "Someone"} shared "${newResource.file_name}"`);
-    });
-
-    socket.on("resource-deleted", ({ resourceId }) => {
-      setResources((old) => old.filter((r) => r.id !== resourceId));
+    channel.subscribe((subStatus) => {
+      if (!isMounted) return;
+      if (subStatus === "SUBSCRIBED") {
+        channel.track({
+          userId: user?.id,
+          username: currentUsername,
+          role: initialRole,
+          isBoardLocked: false,
+        });
+        setStatus(`🟢 Active in ${roomId} as ${initialRole}`);
+        channel.send({
+          type: "broadcast",
+          event: "request-board-state",
+          payload: { requesterId: user?.id },
+        });
+      }
     });
 
     return () => {
-      socket.disconnect();
+      isMounted = false;
+      channel.unsubscribe();
+      channelRef.current = null;
+    };
+  }, [roomId, user?.id, currentUsername, initialRole]);
+
+  // 2. Socket.IO Setup (Connects when dedicated backend server is available)
+  useEffect(() => {
+    let socket = null;
+    try {
+      socket = io(SOCKET_URL, {
+        auth: { token: accessToken },
+        transports: ["websocket", "polling"],
+        timeout: 4000,
+      });
+
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        setSocketClientId(socket.id);
+        setStatus(`🟢 Active in ${roomId} as ${initialRole}`);
+        socket.emit("join-room", { roomId }, (response) => {
+          if (!response?.success) return;
+          setRole(response.role);
+          setBoardLocked(Boolean(response.boardLocked));
+          setIsChatDisabled(Boolean(response.isChatDisabled));
+          setIsIndividuallyLocked(Boolean(response.isIndividuallyLocked));
+        });
+      });
+
+      socket.on("connect_error", () => {
+        // Fallback to Supabase Realtime Channel without displaying websocket error
+        setStatus(`🟢 Active in ${roomId} as ${initialRole}`);
+      });
+
+      socket.on("board-state", (items) => {
+        segmentsRef.current = Array.isArray(items) ? items : [];
+        setRevision((n) => n + 1);
+      });
+
+      socket.on("draw", (item) => {
+        segmentsRef.current.push(item);
+        setRevision((n) => n + 1);
+      });
+
+      socket.on("board-cleared", () => {
+        segmentsRef.current = [];
+        setRevision((n) => n + 1);
+      });
+
+      socket.on("participants-update", (updated) => {
+        if (Array.isArray(updated) && updated.length > 0) {
+          setParticipants(updated);
+        }
+      });
+
+      socket.on("chat-history", (history) => {
+        if (Array.isArray(history) && history.length > 0) {
+          setMessages(history);
+        }
+      });
+
+      socket.on("chat-message", (message) => {
+        setMessages((old) => [...old, message].slice(-100));
+      });
+
+      socket.on("chat-status-updated", ({ isChatDisabled: chatOff }) => {
+        setIsChatDisabled(Boolean(chatOff));
+      });
+
+      socket.on("student-lock-state", ({ isBoardLocked }) => {
+        setIsIndividuallyLocked(Boolean(isBoardLocked));
+      });
+
+      socket.on("kicked-from-room", ({ reason }) => {
+        setKickedModal({ reason: reason || "You have been removed from the classroom session by the teacher." });
+      });
+
+      socket.on("cursor-update", (cursor) => {
+        setCursors((old) => ({ ...old, [cursor.id]: cursor }));
+      });
+
+      socket.on("cursor-left", ({ id }) => {
+        setCursors((old) => {
+          const next = { ...old };
+          delete next[id];
+          return next;
+        });
+      });
+
+      socket.on("board-lock-state", ({ locked }) => {
+        setBoardLocked(Boolean(locked));
+      });
+    } catch (err) {
+      console.warn("Socket initialization notice:", err);
+    }
+
+    return () => {
+      socket?.disconnect();
       socketRef.current = null;
     };
-  }, [roomId, accessToken, profile?.id]);
+  }, [roomId, accessToken, initialRole]);
 
   // Resize Observer for Canvas
   useEffect(() => {
@@ -419,12 +516,22 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   };
 
   const sendCursor = (event) => {
-    if (!socketRef.current) return;
     const now = Date.now();
     if (now - cursorThrottleRef.current < 35) return;
     cursorThrottleRef.current = now;
     const point = getPoint(event);
-    socketRef.current.emit("cursor-move", { roomId, x: point.x, y: point.y });
+    socketRef.current?.emit("cursor-move", { roomId, x: point.x, y: point.y });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "cursor-update",
+      payload: {
+        id: user?.id || socketClientId || currentUsername,
+        username: currentUsername,
+        role: initialRole,
+        x: point.x,
+        y: point.y,
+      },
+    });
   };
 
   const addLocalItem = (item) => {
@@ -435,6 +542,11 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   const addBoardItem = (item) => {
     addLocalItem(item);
     socketRef.current?.emit("draw", { roomId, segment: item });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "draw",
+      payload: item,
+    });
   };
 
   const startDrawing = (event) => {
@@ -482,6 +594,11 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
       };
       addLocalItem(item);
       socketRef.current?.emit("draw", { roomId, segment: item });
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "draw",
+        payload: item,
+      });
     }
   };
 
@@ -569,11 +686,34 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   };
 
   const clearBoard = () => {
-    if (isTeacher) socketRef.current?.emit("clear-board", { roomId });
+    if (isTeacher) {
+      segmentsRef.current = [];
+      setRevision((n) => n + 1);
+      socketRef.current?.emit("clear-board", { roomId });
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "clear-board",
+        payload: {},
+      });
+    }
   };
 
   const undoBoard = () => {
     socketRef.current?.emit("undo-board", { roomId });
+    if (segmentsRef.current.length > 0) {
+      const lastStrokeId = segmentsRef.current[segmentsRef.current.length - 1]?.strokeId;
+      if (lastStrokeId) {
+        segmentsRef.current = segmentsRef.current.filter((item) => item.strokeId !== lastStrokeId);
+      } else {
+        segmentsRef.current.pop();
+      }
+      setRevision((n) => n + 1);
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "board-state",
+        payload: segmentsRef.current,
+      });
+    }
   };
 
   const redoBoard = () => {
@@ -582,42 +722,77 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
   const toggleBoardLock = () => {
     if (isTeacher) {
-      socketRef.current?.emit("set-board-lock", { roomId, locked: !boardLocked });
+      const nextLocked = !boardLocked;
+      setBoardLocked(nextLocked);
+      socketRef.current?.emit("set-board-lock", { roomId, locked: nextLocked });
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "board-lock-state",
+        payload: { locked: nextLocked },
+      });
     }
   };
 
   // Toggle Chat Stopped/Active (Teacher only)
   const toggleChatStatus = () => {
-    if (!isTeacher || !socketRef.current) return;
+    if (!isTeacher) return;
     const nextState = !isChatDisabled;
-    socketRef.current.emit("set-chat-status", { roomId, isChatDisabled: nextState });
+    setIsChatDisabled(nextState);
+    socketRef.current?.emit("set-chat-status", { roomId, isChatDisabled: nextState });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "chat-status-updated",
+      payload: { isChatDisabled: nextState },
+    });
     setStatus(nextState ? "Classroom chat stopped." : "Classroom chat resumed.");
   };
 
   // Toggle Individual Student Whiteboard Lock (Teacher only)
   const handleToggleStudentLock = (person) => {
-    if (!isTeacher || !socketRef.current || !person?.userId) return;
+    if (!isTeacher || !person) return;
     const nextLock = !person.isBoardLocked;
-    socketRef.current.emit("set-student-board-lock", {
+    const personKey = person.userId || person.id;
+    setParticipants((prev) =>
+      prev.map((p) => ((p.userId || p.id) === personKey ? { ...p, isBoardLocked: nextLock } : p))
+    );
+    socketRef.current?.emit("set-student-board-lock", {
       roomId,
-      targetUserId: person.userId,
+      targetUserId: person.userId || person.id,
       locked: nextLock,
+    });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "student-lock-state",
+      payload: { targetUserId: person.userId || person.id, locked: nextLock },
     });
     setStatus(`${nextLock ? "Locked" : "Unlocked"} whiteboard drawing for ${person.username}`);
   };
 
   // Kick / Remove Student from Classroom (Teacher only)
   const handleKickStudent = (person) => {
-    if (!isTeacher || !socketRef.current) return;
+    if (!isTeacher || !person) return;
     const confirmed = window.confirm(
       `Are you sure you want to remove "${person.username}" from this classroom?`
     );
     if (!confirmed) return;
 
-    socketRef.current.emit("kick-student", {
+    const personKey = person.userId || person.id;
+    setParticipants((prev) =>
+      prev.filter((p) => (p.userId || p.id) !== personKey)
+    );
+
+    socketRef.current?.emit("kick-student", {
       roomId,
       targetSocketId: person.id,
       targetUserId: person.userId,
+    });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "kicked-from-room",
+      payload: {
+        targetUserId: person.userId || person.id,
+        reason: "You have been removed from the classroom session by the teacher.",
+      },
     });
     setStatus(`Removed ${person.username} from classroom.`);
   };
@@ -635,14 +810,33 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
     event.preventDefault();
     const message = chatInput.trim();
     if (!message) return;
+    const msgObj = {
+      id: crypto.randomUUID(),
+      sender: currentUsername,
+      role: initialRole,
+      text: message,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setMessages((prev) => [...prev, msgObj].slice(-100));
     socketRef.current?.emit("chat-message", { roomId, message });
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "chat-message",
+      payload: msgObj,
+    });
     setChatInput("");
   };
 
   const handleLeave = () => {
+    try {
+      channelRef.current?.untrack();
+    } catch {
+      // ignore
+    }
     socketRef.current?.emit("leave-room", () => {
       onLeaveRoom();
     });
+    onLeaveRoom();
   };
 
   return (
