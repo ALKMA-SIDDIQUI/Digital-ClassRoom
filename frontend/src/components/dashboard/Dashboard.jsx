@@ -1,7 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/useAuth";
+import { supabase } from "../../lib/supabase";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+
+const isRemoteBackend =
+  SERVER_URL &&
+  !SERVER_URL.includes("localhost") &&
+  !SERVER_URL.includes("127.0.0.1");
+
+const isClientHosted =
+  typeof window !== "undefined" &&
+  window.location.hostname !== "localhost" &&
+  window.location.hostname !== "127.0.0.1";
+
+const useDirectSupabase = isClientHosted && !isRemoteBackend;
 
 export default function Dashboard({ onEnterRoom, onNavigate }) {
   const { profile, user, signOut, accessToken, refreshProfile } = useAuth();
@@ -52,6 +65,34 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
   };
 
   const fetchClassrooms = useCallback(async () => {
+    if (!user?.id && !accessToken) return;
+    if (useDirectSupabase && user?.id) {
+      try {
+        const { data: createdClassrooms } = await supabase
+          .from("classrooms")
+          .select("id, room_code, name, is_locked, created_at, updated_at")
+          .eq("teacher_id", user.id)
+          .order("created_at", { ascending: false });
+
+        const { data: memberRows } = await supabase
+          .from("classroom_members")
+          .select("classroom:classrooms(id, room_code, name, is_locked, teacher_id, created_at)")
+          .eq("user_id", user.id);
+
+        const joinedClassrooms = (memberRows || [])
+          .map((row) => row.classroom)
+          .filter((c) => c && c.teacher_id !== user.id);
+
+        setCreatedRooms(createdClassrooms || []);
+        setJoinedRooms(joinedClassrooms || []);
+      } catch (err) {
+        console.error("Direct Supabase fetch classrooms error:", err);
+      } finally {
+        setLoadingRooms(false);
+      }
+      return;
+    }
+
     if (!accessToken) return;
     try {
       const res = await fetch(`${SERVER_URL}/api/classrooms`, {
@@ -69,39 +110,59 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
     } finally {
       setLoadingRooms(false);
     }
-  }, [accessToken]);
+  }, [accessToken, user]);
 
   useEffect(() => {
-    let active = true;
-    async function load() {
-      if (!accessToken) return;
-      try {
-        const res = await fetch(`${SERVER_URL}/api/classrooms`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const data = await res.json();
-        if (active && res.ok && data.success) {
-          setCreatedRooms(data.created || []);
-          setJoinedRooms(data.joined || []);
-        }
-      } catch (err) {
-        console.error("Init classrooms error:", err);
-      } finally {
-        if (active) setLoadingRooms(false);
-      }
+    let isMounted = true;
+    if (isMounted) {
+      fetchClassrooms();
     }
-    load();
     return () => {
-      active = false;
+      isMounted = false;
     };
-  }, [accessToken]);
+  }, [fetchClassrooms]);
 
   // Handle Create Classroom
   const handleCreateRoom = async (e) => {
     e.preventDefault();
-    if (!accessToken) return;
+    if (!user?.id && !accessToken) return;
     try {
       setCreating(true);
+
+      if (useDirectSupabase && user?.id) {
+        const generatedCode =
+          newRoomCode?.trim().toUpperCase() ||
+          `CLASS-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const roomTitle = newRoomName?.trim() || "My Collaborative Classroom";
+
+        const { data: rpcData, error: rpcError } = await supabase.rpc(
+          "create_classroom",
+          {
+            p_name: roomTitle,
+            p_room_code: generatedCode,
+            p_teacher_id: user.id,
+          }
+        );
+
+        if (rpcError) {
+          const { error: insertError } = await supabase.from("classrooms").insert({
+            name: roomTitle,
+            room_code: generatedCode,
+            teacher_id: user.id,
+            is_locked: false,
+          });
+          if (insertError) throw insertError;
+        }
+
+        const finalCode = rpcData?.room_code || generatedCode;
+        notify(`Classroom ${finalCode} created successfully!`);
+        setNewRoomName("");
+        setNewRoomCode("");
+        await fetchClassrooms();
+        onEnterRoom(finalCode, "teacher", roomTitle);
+        return;
+      }
+
       const res = await fetch(`${SERVER_URL}/api/classrooms`, {
         method: "POST",
         headers: {
@@ -136,13 +197,45 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
   // Handle Join Classroom
   const handleJoinRoom = async (e) => {
     e.preventDefault();
-    if (!joinCodeInput.trim() || !accessToken) {
+    if (!joinCodeInput.trim() || (!user?.id && !accessToken)) {
       notify("Please enter a room code.", true);
       return;
     }
 
     try {
       setJoining(true);
+
+      if (useDirectSupabase && user?.id) {
+        const cleanCode = joinCodeInput.trim().toUpperCase();
+        const { data: classroom, error: findError } = await supabase
+          .from("classrooms")
+          .select("id, name, room_code, is_locked, teacher_id")
+          .eq("room_code", cleanCode)
+          .maybeSingle();
+
+        if (findError || !classroom) {
+          throw new Error("Classroom not found. Please verify the code.");
+        }
+
+        const role = classroom.teacher_id === user.id ? "teacher" : "student";
+        if (role === "student") {
+          await supabase.from("classroom_members").upsert(
+            {
+              classroom_id: classroom.id,
+              user_id: user.id,
+              role: "student",
+            },
+            { onConflict: "classroom_id,user_id" }
+          );
+        }
+
+        notify(`Joined ${classroom.room_code} as ${role}`);
+        setJoinCodeInput("");
+        await fetchClassrooms();
+        onEnterRoom(classroom.room_code, role, classroom.name);
+        return;
+      }
+
       const res = await fetch(`${SERVER_URL}/api/classrooms/join`, {
         method: "POST",
         headers: {
@@ -177,13 +270,32 @@ export default function Dashboard({ onEnterRoom, onNavigate }) {
       notify("Please enter your teacher invitation passkey (TEACH_2026_COLAB_SECRET).", true);
       return;
     }
-    if (!accessToken) {
-      notify("Your session has expired. Please sign in again.", true);
-      return;
-    }
 
     try {
       setPromoting(true);
+
+      if (useDirectSupabase && user?.id) {
+        const VALID_PASSKEY = "TEACH_2026_COLAB_SECRET";
+        if (cleanCode.toUpperCase() !== VALID_PASSKEY.toUpperCase()) {
+          throw new Error("Invalid teacher invitation passkey.");
+        }
+
+        await supabase
+          .from("profiles")
+          .update({ role: "teacher" })
+          .eq("id", user.id);
+
+        await supabase.auth.updateUser({
+          data: { role: "teacher", is_promoted_student: true },
+        });
+
+        notify("🎉 Verified successfully as Teacher! Classroom creation unlocked.");
+        setPromoCode("");
+        if (refreshProfile) await refreshProfile();
+        await fetchClassrooms();
+        return;
+      }
+
       const res = await fetch(`${SERVER_URL}/api/auth/register-teacher`, {
         method: "POST",
         headers: {
