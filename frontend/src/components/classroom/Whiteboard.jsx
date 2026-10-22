@@ -118,12 +118,47 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   const [preview, setPreview] = useState(null);
   const [revision, setRevision] = useState(0);
 
+  const clientSessionIdRef = useRef(
+    `sess_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`
+  );
+
   // Collaboration State
   const [socketClientId, setSocketClientId] = useState("");
-  const [participants, setParticipants] = useState([]);
+  const [participants, setParticipants] = useState([
+    {
+      id: clientSessionIdRef.current,
+      clientSessionId: clientSessionIdRef.current,
+      userId: user?.id || clientSessionIdRef.current,
+      username: currentUsername,
+      role: initialRole,
+      isBoardLocked: false,
+    },
+  ]);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [cursors, setCursors] = useState({});
+
+  // Ensure current user is always properly reflected in participants
+  useEffect(() => {
+    setParticipants((prev) => {
+      const myKey = user?.id || clientSessionIdRef.current;
+      const exists = prev.some((p) => (p.userId || p.clientSessionId || p.id) === myKey);
+      const myObj = {
+        id: clientSessionIdRef.current,
+        clientSessionId: clientSessionIdRef.current,
+        userId: user?.id || clientSessionIdRef.current,
+        username: currentUsername,
+        role: initialRole,
+        isBoardLocked: Boolean(isIndividuallyLocked),
+      };
+      if (exists) {
+        return prev.map((p) =>
+          (p.userId || p.clientSessionId || p.id) === myKey ? { ...p, ...myObj } : p
+        );
+      }
+      return [myObj, ...prev];
+    });
+  }, [user?.id, currentUsername, initialRole, isIndividuallyLocked]);
 
   // Classroom Resources (Supabase Storage)
   const [sidebarTab, setSidebarTab] = useState("chat"); // "chat" | "participants" | "resources"
@@ -182,32 +217,101 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
     renderBoard();
   }, [renderBoard, revision]);
 
-  // Load Resources from Supabase Storage on mount / room change
+  // Load Classroom Information & Active Teacher from DB
   useEffect(() => {
     let isMounted = true;
-    async function fetchRoomResources() {
+    async function loadClassroomDetails() {
       if (!roomId) return;
       try {
-        const token = await getValidToken();
-        if (!token || !isMounted) return;
-        const res = await fetch(`${SOCKET_URL}/api/classrooms/${roomId}/resources`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (isMounted && res.ok && data.success) {
-          setResources(data.resources || []);
+        const cleanCode = roomId.trim().toUpperCase();
+        const { data: classroom, error } = await supabase
+          .from("classrooms")
+          .select("id, name, teacher_id, is_locked, profiles:teacher_id(id, full_name, role)")
+          .eq("room_code", cleanCode)
+          .maybeSingle();
+
+        if (error || !classroom) return;
+
+        if (isMounted) {
+          if (typeof classroom.is_locked === "boolean") {
+            setBoardLocked(classroom.is_locked);
+          }
+
+          // If official teacher exists, ensure teacher is displayed in participants
+          if (classroom.profiles) {
+            setParticipants((prev) => {
+              const teacherId = classroom.profiles.id;
+              const exists = prev.some((p) => (p.userId || p.id) === teacherId);
+              if (exists) return prev;
+              const teacherObj = {
+                id: teacherId,
+                userId: teacherId,
+                username: classroom.profiles.full_name || "Teacher",
+                role: "teacher",
+                isBoardLocked: false,
+              };
+              return [teacherObj, ...prev];
+            });
+          }
         }
       } catch (err) {
-        console.error("Load resources error:", err);
+        console.warn("loadClassroomDetails notice:", err?.message);
       }
     }
-    fetchRoomResources();
+
+    loadClassroomDetails();
     return () => {
       isMounted = false;
     };
-  }, [roomId, getValidToken]);
+  }, [roomId]);
 
-  // Handle Resource Upload to Supabase Storage
+  // Load Resources directly from Supabase Storage & PostgreSQL on mount / room change
+  const fetchRoomResources = useCallback(async () => {
+    if (!roomId) return;
+    try {
+      const cleanCode = roomId.trim().toUpperCase();
+      const { data: classroom, error: classErr } = await supabase
+        .from("classrooms")
+        .select("id")
+        .eq("room_code", cleanCode)
+        .maybeSingle();
+
+      if (classErr || !classroom?.id) return;
+
+      const { data: dbResources, error: dbErr } = await supabase
+        .from("classroom_resources")
+        .select("id, classroom_id, uploader_id, file_name, file_path, file_size, mime_type, created_at, profiles:uploader_id(full_name)")
+        .eq("classroom_id", classroom.id)
+        .order("created_at", { ascending: false });
+
+      if (dbErr) {
+        console.warn("fetchRoomResources error:", dbErr.message);
+        return;
+      }
+
+      const enriched = (dbResources || []).map((item) => {
+        const { data: pubData } = supabase.storage
+          .from("classroom-resources")
+          .getPublicUrl(item.file_path);
+        const url = pubData?.publicUrl || "";
+        return {
+          ...item,
+          publicUrl: url,
+          downloadUrl: url,
+        };
+      });
+
+      setResources(enriched);
+    } catch (err) {
+      console.warn("fetchRoomResources notice:", err?.message);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    fetchRoomResources();
+  }, [fetchRoomResources]);
+
+  // Handle Resource Upload directly to Supabase Storage
   const handleFileUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -221,33 +325,80 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
     try {
       setUploading(true);
-      const token = await getValidToken();
-      if (!token) {
-        setUploadError("Session token missing. Please sign in again.");
-        return;
+      const cleanCode = roomId.trim().toUpperCase();
+
+      // 1. Get Classroom ID
+      const { data: classroom, error: classErr } = await supabase
+        .from("classrooms")
+        .select("id")
+        .eq("room_code", cleanCode)
+        .maybeSingle();
+
+      if (classErr || !classroom?.id) {
+        throw new Error("Classroom not found for file upload. Please verify the room code.");
       }
 
-      const formData = new FormData();
-      formData.append("file", file);
+      // 2. Upload file directly to Supabase Storage bucket 'classroom-resources'
+      const sanitizedName = (file.name || "unnamed_file").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${classroom.id}/${Date.now()}-${sanitizedName}`;
 
-      const res = await fetch(`${SOCKET_URL}/api/classrooms/${roomId}/resources`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+      const { error: uploadErr } = await supabase.storage
+        .from("classroom-resources")
+        .upload(storagePath, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        throw new Error(`Storage upload failed: ${uploadErr.message}`);
+      }
+
+      // 3. Resolve permanent Public URL
+      const { data: pubData } = supabase.storage
+        .from("classroom-resources")
+        .getPublicUrl(storagePath);
+      const publicUrl = pubData?.publicUrl || "";
+
+      // 4. Save file metadata in PostgreSQL classroom_resources
+      const { data: inserted, error: insertErr } = await supabase
+        .from("classroom_resources")
+        .insert({
+          classroom_id: classroom.id,
+          uploader_id: user?.id || null,
+          file_name: file.name,
+          file_path: storagePath,
+          file_size: file.size,
+          mime_type: file.type || "application/octet-stream",
+        })
+        .select("id, classroom_id, uploader_id, file_name, file_path, file_size, mime_type, created_at, profiles:uploader_id(full_name)")
+        .single();
+
+      if (insertErr) {
+        throw new Error(`Failed to save file details: ${insertErr.message}`);
+      }
+
+      const newResource = {
+        ...inserted,
+        publicUrl,
+        downloadUrl: publicUrl,
+      };
+
+      // 5. Update local state immediately
+      setResources((prev) => [newResource, ...prev.filter((r) => r.id !== newResource.id)]);
+      setStatus(`Resource "${file.name}" uploaded successfully!`);
+
+      // 6. Broadcast to ALL participants in the room via Supabase Realtime channel
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "resource-uploaded",
+        payload: newResource,
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Upload failed");
-      }
-
-      // Prepend newly uploaded file to active list immediately
-      if (data.resource) {
-        setResources((prev) => [data.resource, ...prev.filter((r) => r.id !== data.resource.id)]);
-      }
-      setStatus(`Resource "${file.name}" uploaded successfully!`);
+      // Also notify socket if available
+      socketRef.current?.emit("resource-uploaded", newResource);
     } catch (err) {
-      setUploadError(err.message);
+      console.error("handleFileUpload error:", err);
+      setUploadError(err.message || "Failed to upload file.");
       setStatus(`Upload error: ${err.message}`);
     } finally {
       setUploading(false);
@@ -255,25 +406,27 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
     }
   };
 
-  // Handle Resource Deletion
+  // Handle Resource Deletion directly via Supabase Storage
   const handleDeleteResource = async (resourceId) => {
     if (!window.confirm("Are you sure you want to delete this resource?")) return;
     try {
-      const token = await getValidToken();
-      if (!token) return;
-
-      const res = await fetch(`${SOCKET_URL}/api/classrooms/${roomId}/resources/${resourceId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setResources((prev) => prev.filter((r) => r.id !== resourceId));
-        setStatus("Resource removed.");
-      } else {
-        alert(data.message || "Could not delete resource");
+      const resourceToDelete = resources.find((r) => r.id === resourceId);
+      if (resourceToDelete?.file_path) {
+        await supabase.storage.from("classroom-resources").remove([resourceToDelete.file_path]);
       }
+      const { error } = await supabase.from("classroom_resources").delete().eq("id", resourceId);
+      if (error) throw error;
+
+      setResources((prev) => prev.filter((r) => r.id !== resourceId));
+      setStatus("Resource removed.");
+
+      // Broadcast deletion
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "resource-deleted",
+        payload: { resourceId },
+      });
+      socketRef.current?.emit("resource-deleted", { resourceId });
     } catch (err) {
       alert(`Delete error: ${err.message}`);
     }
@@ -283,10 +436,21 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   useEffect(() => {
     let isMounted = true;
     const channelName = `classroom:${roomId}`;
+    const mySessionId = clientSessionIdRef.current;
+
+    const myData = {
+      id: mySessionId,
+      clientSessionId: mySessionId,
+      userId: user?.id || mySessionId,
+      username: currentUsername || "Participant",
+      role: initialRole || "student",
+      isBoardLocked: false,
+    };
+
     const channel = supabase.channel(channelName, {
       config: {
         broadcast: { ack: false, self: false },
-        presence: { key: user?.id || `user-${Math.random().toString(36).substring(2, 8)}` },
+        presence: { key: mySessionId },
       },
     });
     channelRef.current = channel;
@@ -340,7 +504,7 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
     // Cursor movement sync
     channel.on("broadcast", { event: "cursor-update" }, ({ payload }) => {
-      if (!isMounted || !payload?.id || payload.id === user?.id) return;
+      if (!isMounted || !payload?.id || payload.id === user?.id || payload.id === mySessionId) return;
       setCursors((prev) => ({ ...prev, [payload.id]: payload }));
     });
 
@@ -360,32 +524,119 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
       });
     });
 
-    // Real-time Presence for Participant List
-    channel.on("presence", { event: "sync" }, () => {
+    // Real-Time Resource Sync (files uploaded / deleted)
+    channel.on("broadcast", { event: "resource-uploaded" }, ({ payload }) => {
+      if (!isMounted || !payload?.id) return;
+      setResources((prev) => [payload, ...prev.filter((r) => r.id !== payload.id)]);
+      setStatus(`New file shared: ${payload.file_name}`);
+    });
+
+    channel.on("broadcast", { event: "resource-deleted" }, ({ payload }) => {
+      if (!isMounted || !payload?.resourceId) return;
+      setResources((prev) => prev.filter((r) => r.id !== payload.resourceId));
+    });
+
+    // Instant Peer Handshake: When someone announces joining, reply with own info
+    channel.on("broadcast", { event: "peer-announce" }, ({ payload }) => {
+      if (!isMounted || !payload || payload.clientSessionId === mySessionId) return;
+
+      setParticipants((prev) => {
+        const key = payload.userId || payload.clientSessionId || payload.id;
+        const exists = prev.some((p) => (p.userId || p.clientSessionId || p.id) === key);
+        if (exists) {
+          return prev.map((p) =>
+            (p.userId || p.clientSessionId || p.id) === key ? { ...p, ...payload } : p
+          );
+        }
+        return [...prev, payload];
+      });
+
+      // Reply back with our info so the new participant immediately sees us
+      channel.send({
+        type: "broadcast",
+        event: "peer-reply",
+        payload: myData,
+      });
+    });
+
+    channel.on("broadcast", { event: "peer-reply" }, ({ payload }) => {
+      if (!isMounted || !payload || payload.clientSessionId === mySessionId) return;
+
+      setParticipants((prev) => {
+        const key = payload.userId || payload.clientSessionId || payload.id;
+        const exists = prev.some((p) => (p.userId || p.clientSessionId || p.id) === key);
+        if (exists) {
+          return prev.map((p) =>
+            (p.userId || p.clientSessionId || p.id) === key ? { ...p, ...payload } : p
+          );
+        }
+        return [...prev, payload];
+      });
+    });
+
+    channel.on("broadcast", { event: "peer-left" }, ({ payload }) => {
+      if (!isMounted || !payload) return;
+      const leaveKey = payload.userId || payload.clientSessionId || payload.id;
+      setParticipants((prev) =>
+        prev.filter((p) => (p.userId || p.clientSessionId || p.id) !== leaveKey)
+      );
+    });
+
+    // Real-time Presence Sync
+    const updatePresenceState = () => {
       if (!isMounted) return;
       const state = channel.presenceState();
       const onlineUsers = Object.values(state).flat().map((p) => ({
-        id: p.userId || p.id,
+        id: p.clientSessionId || p.userId || p.id,
+        clientSessionId: p.clientSessionId,
         userId: p.userId,
         username: p.username || "Participant",
         role: p.role || "student",
         isBoardLocked: Boolean(p.isBoardLocked),
       }));
-      if (onlineUsers.length > 0) {
-        setParticipants(onlineUsers);
-      }
-    });
 
-    channel.subscribe((subStatus) => {
+      if (onlineUsers.length > 0) {
+        setParticipants((prev) => {
+          const map = new Map();
+          // Keep current self
+          map.set(myData.userId || myData.id, myData);
+          // Add previous participants
+          prev.forEach((p) => {
+            const k = p.userId || p.clientSessionId || p.id;
+            if (k) map.set(k, p);
+          });
+          // Merge newly detected online users
+          onlineUsers.forEach((p) => {
+            const k = p.userId || p.clientSessionId || p.id;
+            if (k) map.set(k, p);
+          });
+          return Array.from(map.values());
+        });
+      }
+    };
+
+    channel.on("presence", { event: "sync" }, updatePresenceState);
+    channel.on("presence", { event: "join" }, updatePresenceState);
+    channel.on("presence", { event: "leave" }, updatePresenceState);
+
+    channel.subscribe(async (subStatus) => {
       if (!isMounted) return;
       if (subStatus === "SUBSCRIBED") {
-        channel.track({
-          userId: user?.id,
-          username: currentUsername,
-          role: initialRole,
-          isBoardLocked: false,
-        });
+        try {
+          await channel.track(myData);
+        } catch (trackErr) {
+          console.warn("Presence track notice:", trackErr);
+        }
         setStatus(`🟢 Active in ${roomId} as ${initialRole}`);
+
+        // Broadcast peer announcement
+        channel.send({
+          type: "broadcast",
+          event: "peer-announce",
+          payload: myData,
+        });
+
+        // Request board state from active peers
         channel.send({
           type: "broadcast",
           event: "request-board-state",
@@ -396,7 +647,16 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
     return () => {
       isMounted = false;
-      channel.unsubscribe();
+      try {
+        channel.send({
+          type: "broadcast",
+          event: "peer-left",
+          payload: { clientSessionId: mySessionId, userId: user?.id },
+        });
+        channel.unsubscribe();
+      } catch {
+        // ignore
+      }
       channelRef.current = null;
     };
   }, [roomId, user?.id, currentUsername, initialRole]);
@@ -812,9 +1072,12 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
     if (!message) return;
     const msgObj = {
       id: crypto.randomUUID(),
+      username: currentUsername,
       sender: currentUsername,
       role: initialRole,
+      message,
       text: message,
+      time: new Date().toISOString(),
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
     setMessages((prev) => [...prev, msgObj].slice(-100));
@@ -829,7 +1092,16 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
   const handleLeave = () => {
     try {
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "peer-left",
+        payload: {
+          clientSessionId: clientSessionIdRef.current,
+          userId: user?.id,
+        },
+      });
       channelRef.current?.untrack();
+      channelRef.current?.unsubscribe();
     } catch {
       // ignore
     }
@@ -1175,20 +1447,28 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
                         No messages yet. Greet the classroom!
                       </p>
                     ) : (
-                      messages.map((item, index) => (
-                        <div
-                          key={item.id || `${item.time}-${index}`}
-                          className="rounded-lg bg-white p-2 text-xs shadow-sm border border-slate-100"
-                        >
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-blue-600">{item.username}</span>
-                            <span className="text-[10px] text-slate-400">
-                              {item.time ? new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                            </span>
+                      messages.map((item, index) => {
+                        const senderName = item.username || item.sender || "Participant";
+                        const msgContent = item.message || item.text || "";
+                        const displayTime =
+                          item.timestamp ||
+                          (item.time
+                            ? new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                            : "");
+
+                        return (
+                          <div
+                            key={item.id || `${item.time || index}-${index}`}
+                            className="rounded-lg bg-white p-2 text-xs shadow-sm border border-slate-100"
+                          >
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-bold text-blue-600">{senderName}</span>
+                              <span className="text-[10px] text-slate-400">{displayTime}</span>
+                            </div>
+                            <p className="text-slate-800 break-words">{msgContent}</p>
                           </div>
-                          <p className="text-slate-800 break-words">{item.message}</p>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                   <form onSubmit={sendMessage} className="flex gap-2">
@@ -1221,12 +1501,15 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
               {sidebarTab === "participants" && (
                 <div className="h-80 overflow-y-auto space-y-2 pr-0.5">
                   {participants.map((person) => {
-                    const isSelf = person.id === socketClientId || (profile?.id && person.userId === profile.id);
+                    const isSelf =
+                      person.id === socketClientId ||
+                      person.clientSessionId === clientSessionIdRef.current ||
+                      (profile?.id && person.userId === profile.id);
                     const canModerate = isTeacher && !isSelf && person.role !== "teacher";
 
                     return (
                       <div
-                        key={person.id}
+                        key={person.clientSessionId || person.id || person.userId}
                         className="rounded-lg bg-slate-50 p-2 border border-slate-100 space-y-1.5"
                       >
                         <div className="flex items-center justify-between gap-1.5">
