@@ -1,112 +1,118 @@
-import { UserPlus, DoorOpen, Presentation, ArrowRight } from "lucide-react";
+import { Database, Sliders, PlayCircle, LineChart, ArrowRight } from "lucide-react";
 
 export default function HowItWorksSection({ onOpenAuth }) {
   const steps = [
     {
       step: "01",
-      title: "Create an Account",
-      subtitle: "Instant & Secure Setup",
+      title: "Connect Data & Tools",
+      subtitle: "Instant & Zero Setup",
       description:
-        "Sign up in seconds. Educators verify their teacher passkey for room creation powers, while students register with their email.",
-      icon: UserPlus,
-      color: "bg-blue-600 text-white",
-      badge: "Free Registration",
+        "Initialize an encrypted session in seconds. Authenticate educators with verified teacher keys and connect storage pipelines seamlessly.",
+      icon: Database,
+      accent: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
+      tag: "10-Sec Setup",
     },
     {
       step: "02",
-      title: "Create or Join Classroom",
-      subtitle: "Zero Hassle Entry",
+      title: "Configure Intelligence Layer",
+      subtitle: "Custom Permissions & Rooms",
       description:
-        "Teachers launch classrooms with custom names. Students enter the simple 6-character room code to join instantly.",
-      icon: DoorOpen,
-      color: "bg-violet-600 text-white",
-      badge: "6-Digit Code",
+        "Define educator authority, individual student canvas locks, chat moderation thresholds, and high-resolution vector canvas presets.",
+      icon: Sliders,
+      accent: "text-blue-400 border-blue-500/30 bg-blue-500/10",
+      tag: "Zero-Trust RBAC",
     },
     {
       step: "03",
-      title: "Teach, Draw & Collaborate",
-      subtitle: "Live Interactive Lessons",
+      title: "Deploy & Collaborate Live",
+      subtitle: "Real-Time Vector Sync",
       description:
-        "Draw diagrams, explain formulas, chat live, share 25MB handouts, and export final notes as high-resolution PNGs.",
-      icon: Presentation,
-      color: "bg-emerald-600 text-white",
-      badge: "Real-time Sync",
+        "Students join via 6-digit room codes. Experience multi-user live stroke streaming, real-time cursors, and 25MB PDF/handout sharing.",
+      icon: PlayCircle,
+      accent: "text-violet-400 border-violet-500/30 bg-violet-500/10",
+      tag: "0ms Perceived Latency",
+    },
+    {
+      step: "04",
+      title: "Monitor & Optimize Performance",
+      subtitle: "Session Observability & Export",
+      description:
+        "Track participant engagement in real-time. Export vector board notes to crystal-clear PNG snapshots for student revision and archive.",
+      icon: LineChart,
+      accent: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+      tag: "High-Res PNG Export",
     },
   ];
 
   return (
-    <section id="how-it-works" className="py-20 md:py-28 bg-white border-t border-slate-100">
+    <section id="solutions" className="py-24 md:py-32 bg-[#090D16] border-t border-white/[0.08] relative overflow-hidden">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#315BFF] mb-2 block">
-            Simple 3-Step Workflow
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2 block">
+            End-to-End Workflow
           </span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#101828]">
-            Get Started in Less Than 60 Seconds
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+            From Setup to Production in{" "}
+            <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-400 bg-clip-text text-transparent">
+              Four Simple Steps
+            </span>
           </h2>
-          <p className="mt-3 text-sm sm:text-base text-[#53627A]">
-            No complex software installations or browser extensions needed. Works directly in standard web browsers.
+          <p className="mt-4 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto">
+            Engineered to remove complexity so educators can teach and engineering teams can deploy intelligent collaborative systems instantly.
           </p>
         </div>
 
-        {/* 3 Step Cards with Visual Connectors */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+        {/* 4 Connected Step Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           {steps.map((item, index) => {
             const Icon = item.icon;
             return (
               <div
                 key={index}
-                className="relative rounded-3xl border border-slate-200/90 bg-[#F6F8FF]/60 p-8 shadow-xs hover:shadow-xl hover:bg-white transition-all duration-300 flex flex-col justify-between"
+                className="group relative rounded-2xl bg-[#0D111A]/90 p-6 border border-white/[0.08] hover:border-white/20 transition-all duration-300 backdrop-blur-md flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl hover:shadow-cyan-500/10"
               >
                 <div>
-                  {/* Step Number & Badge */}
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="font-mono text-3xl font-extrabold text-slate-300">
+                  {/* Step Header */}
+                  <div className="flex items-center justify-between mb-5">
+                    <span className="font-mono text-2xl font-black text-slate-600 group-hover:text-cyan-400 transition">
                       {item.step}
                     </span>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 border border-slate-200 shadow-2xs">
-                      {item.badge}
+                    <span className="font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-white/[0.04] text-slate-400 border border-white/[0.08]">
+                      {item.tag}
                     </span>
                   </div>
 
-                  {/* Icon Container */}
-                  <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${item.color} shadow-md shadow-blue-500/10`}>
-                    <Icon className="h-6 w-6" />
+                  <div className={`inline-flex p-3 rounded-xl border ${item.accent} mb-4`}>
+                    <Icon className="h-5 w-5" />
                   </div>
 
-                  {/* Text */}
-                  <h3 className="text-lg font-bold text-[#101828] mb-1">
+                  <h3 className="text-lg font-bold text-white mb-1 group-hover:text-cyan-300 transition">
                     {item.title}
                   </h3>
-                  <p className="text-xs font-semibold text-[#315BFF] mb-3">
+                  <div className="text-xs font-semibold text-slate-400 mb-2.5">
                     {item.subtitle}
-                  </p>
-                  <p className="text-xs sm:text-sm text-[#53627A] leading-relaxed">
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-normal">
                     {item.description}
                   </p>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-slate-200/60 flex items-center gap-1.5 text-xs font-bold text-[#315BFF]">
-                  <span>Step {item.step} Complete</span>
-                  <span>✓</span>
+                <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="font-mono">Step {index + 1} of 4</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAuth?.("signup")}
+                    className="text-cyan-400 group-hover:translate-x-1 transition flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <span>Test Flow</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
                 </div>
               </div>
             );
           })}
-        </div>
-
-        {/* CTA Bar Below */}
-        <div className="mt-14 text-center">
-          <button
-            type="button"
-            onClick={() => onOpenAuth("signup")}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#101828] px-6 py-3.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-slate-800 transition cursor-pointer"
-          >
-            Create Your Account Now
-            <ArrowRight className="h-4 w-4" />
-          </button>
         </div>
 
       </div>

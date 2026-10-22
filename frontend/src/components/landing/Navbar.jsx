@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ArrowRight, LayoutDashboard, LogOut } from "lucide-react";
+import { Menu, X, ArrowRight, LayoutDashboard, LogOut, Cpu } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 
 export default function Navbar({ onNavigate, onOpenAuth }) {
@@ -32,254 +32,216 @@ export default function Navbar({ onNavigate, onOpenAuth }) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200/80 py-3"
+          ? "bg-[#07090E]/85 backdrop-blur-xl border-b border-white/[0.08] shadow-2xl shadow-black/50 py-3"
           : "bg-transparent py-4 md:py-5"
       }`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Brand Logo & Name */}
+        
+        {/* Brand Logo: Optimus */}
         <a
-          href="/"
-          onClick={(e) => {
-            e.preventDefault();
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          className="flex items-center gap-2.5 group cursor-pointer"
+          href="#home"
+          onClick={(e) => handleNavClick(e, "home")}
+          className="flex items-center gap-3 group cursor-pointer"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#315BFF] to-[#7047FF] text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition">
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect width="18" height="14" x="3" y="3" rx="2" />
-              <path d="M3 10h18" />
-              <path d="m14 14 3 3" />
-              <path d="m17 14-3 3" />
-            </svg>
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#315BFF] via-[#5442FF] to-[#06B6D4] text-white shadow-lg shadow-blue-500/25 group-hover:scale-105 group-hover:shadow-blue-500/40 transition duration-300">
+            <Cpu className="h-5 w-5 text-white" />
+            <div className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 transition" />
           </div>
-          <div>
-            <span className="text-base sm:text-lg font-bold tracking-tight text-[#101828] block leading-tight">
-              Digital Classroom Board
-            </span>
-            <span className="text-[10px] sm:text-[11px] font-semibold text-[#53627A] hidden sm:block">
-              Interactive • Real-time • Collaborative
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xl font-black tracking-tight text-white group-hover:text-blue-300 transition">
+                Optimus
+              </span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase bg-blue-500/10 text-cyan-400 border border-cyan-500/20">
+                AI Infra
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 -mt-0.5 tracking-wide hidden sm:block">
+              Intelligent Collaborative Platform
             </span>
           </div>
         </a>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-7">
+        <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-slate-300">
           <a
-            href="#home"
-            onClick={(e) => handleNavClick(e, "home")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#platform"
+            onClick={(e) => handleNavClick(e, "platform")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            Home
+            Platform
           </a>
           <a
-            href="#features"
-            onClick={(e) => handleNavClick(e, "features")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#solutions"
+            onClick={(e) => handleNavClick(e, "solutions")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            Features
+            Solutions
           </a>
           <a
-            href="#preview"
-            onClick={(e) => handleNavClick(e, "preview")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#developers"
+            onClick={(e) => handleNavClick(e, "developers")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            Product Preview
+            Developers
           </a>
           <a
-            href="#how-it-works"
-            onClick={(e) => handleNavClick(e, "how-it-works")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#infrastructure"
+            onClick={(e) => handleNavClick(e, "infrastructure")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            How It Works
+            Infrastructure
           </a>
           <a
-            href="#for-teachers"
-            onClick={(e) => handleNavClick(e, "for-teachers")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#pricing"
+            onClick={(e) => handleNavClick(e, "pricing")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            For Teachers
+            Pricing
           </a>
           <a
-            href="#for-students"
-            onClick={(e) => handleNavClick(e, "for-students")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
+            href="#resources"
+            onClick={(e) => handleNavClick(e, "resources")}
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
-            For Students
-          </a>
-          <a
-            href="#faq"
-            onClick={(e) => handleNavClick(e, "faq")}
-            className="text-xs font-semibold text-[#53627A] hover:text-[#315BFF] transition"
-          >
-            FAQ
+            Resources
           </a>
         </nav>
 
-        {/* Desktop Auth Controls */}
-        <div className="hidden md:flex items-center gap-3">
+        {/* Desktop User Actions */}
+        <div className="hidden lg:flex items-center gap-3">
           {session ? (
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-[#53627A] font-medium hidden xl:inline">
-                Hi, <strong className="text-[#101828]">{profile?.full_name || "User"}</strong>
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                  isTeacher ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"
-                }`}
-              >
-                {isTeacher ? "Teacher" : "Student"}
-              </span>
+            <>
               <button
                 type="button"
-                onClick={() => onNavigate("/dashboard")}
-                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#315BFF] to-[#7047FF] px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:opacity-95 transition cursor-pointer"
+                onClick={() => onNavigate?.("dashboard")}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02] transition cursor-pointer"
               >
                 <LayoutDashboard className="h-3.5 w-3.5" />
-                Go to Dashboard
+                <span>Go to Dashboard</span>
+                <span className="rounded bg-black/30 px-1.5 py-0.5 text-[10px]">
+                  {isTeacher ? "Teacher" : "Student"}
+                </span>
               </button>
+
               <button
                 type="button"
-                onClick={() => signOut()}
-                className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                onClick={() => signOut?.()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition cursor-pointer"
                 title="Sign Out"
               >
                 <LogOut className="h-3.5 w-3.5" />
+                <span>Sign Out</span>
               </button>
-            </div>
+            </>
           ) : (
-            <div className="flex items-center gap-2.5">
+            <>
               <button
                 type="button"
-                onClick={() => onOpenAuth("signin")}
-                className="rounded-xl px-4 py-2 text-xs font-semibold text-[#101828] hover:text-[#315BFF] hover:bg-slate-50 transition cursor-pointer"
+                onClick={() => onOpenAuth?.("signin")}
+                className="px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white transition cursor-pointer"
               >
-                Log In
+                Sign in
               </button>
+
               <button
                 type="button"
-                onClick={() => onOpenAuth("signup")}
-                className="flex items-center gap-1.5 rounded-xl bg-[#315BFF] px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-[#2548DE] transition cursor-pointer"
+                onClick={() => onOpenAuth?.("signup")}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#315BFF] via-[#5442FF] to-[#7047FF] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02] transition cursor-pointer"
               >
-                Get Started Free
-                <ArrowRight className="h-3.5 w-3.5" />
+                <span>Get started</span>
+                <ArrowRight className="h-4 w-4" />
               </button>
-            </div>
+            </>
           )}
         </div>
 
         {/* Mobile Hamburger Button */}
-        <div className="flex md:hidden items-center gap-2">
-          {session && (
-            <button
-              type="button"
-              onClick={() => onNavigate("/dashboard")}
-              className="rounded-lg bg-[#315BFF] px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm"
-            >
-              Dashboard
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="rounded-xl border border-slate-200 p-2 text-slate-700 hover:bg-slate-50 transition focus:outline-none"
-            aria-label="Toggle Menu"
-          >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="lg:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.06] border border-white/10 transition cursor-pointer"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </button>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 bg-white px-4 pt-3 pb-6 shadow-xl animate-in slide-in-from-top">
-          <nav className="flex flex-col space-y-2.5 pb-4 border-b border-slate-100">
+        <div className="lg:hidden mt-2 mx-4 rounded-2xl bg-[#0B0F19]/95 backdrop-blur-2xl border border-white/10 p-5 shadow-2xl shadow-black/80 space-y-4 animate-in fade-in slide-in-from-top duration-200">
+          <nav className="flex flex-col space-y-3 text-sm font-medium text-slate-300">
             <a
-              href="#home"
-              onClick={(e) => handleNavClick(e, "home")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#platform"
+              onClick={(e) => handleNavClick(e, "platform")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              Home
+              Platform
             </a>
             <a
-              href="#features"
-              onClick={(e) => handleNavClick(e, "features")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#solutions"
+              onClick={(e) => handleNavClick(e, "solutions")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              Features
+              Solutions
             </a>
             <a
-              href="#preview"
-              onClick={(e) => handleNavClick(e, "preview")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#developers"
+              onClick={(e) => handleNavClick(e, "developers")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              Product Preview
+              Developers
             </a>
             <a
-              href="#how-it-works"
-              onClick={(e) => handleNavClick(e, "how-it-works")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#infrastructure"
+              onClick={(e) => handleNavClick(e, "infrastructure")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              How It Works
+              Infrastructure
             </a>
             <a
-              href="#for-teachers"
-              onClick={(e) => handleNavClick(e, "for-teachers")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#pricing"
+              onClick={(e) => handleNavClick(e, "pricing")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              For Teachers
+              Pricing
             </a>
             <a
-              href="#for-students"
-              onClick={(e) => handleNavClick(e, "for-students")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
+              href="#resources"
+              onClick={(e) => handleNavClick(e, "resources")}
+              className="px-3 py-2 rounded-lg hover:bg-white/[0.05] hover:text-cyan-400 transition"
             >
-              For Students
-            </a>
-            <a
-              href="#faq"
-              onClick={(e) => handleNavClick(e, "faq")}
-              className="rounded-lg p-2 text-xs font-semibold text-[#53627A] hover:bg-slate-50"
-            >
-              FAQ
+              Resources
             </a>
           </nav>
 
-          <div className="pt-4 space-y-2">
+          <div className="pt-3 border-t border-white/10 flex flex-col gap-2.5">
             {session ? (
               <>
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    onNavigate("/dashboard");
+                    onNavigate?.("dashboard");
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#315BFF] to-[#7047FF] py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 py-2.5 text-xs font-bold text-white shadow-lg"
                 >
                   <LayoutDashboard className="h-4 w-4" />
-                  Open Dashboard
+                  <span>Go to Dashboard ({isTeacher ? "Teacher" : "Student"})</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    signOut();
+                    signOut?.();
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] py-2 text-xs font-medium text-slate-300"
                 >
                   <LogOut className="h-4 w-4" />
-                  Sign Out
+                  <span>Sign Out</span>
                 </button>
               </>
             ) : (
@@ -288,22 +250,21 @@ export default function Navbar({ onNavigate, onOpenAuth }) {
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    onOpenAuth("signin");
+                    onOpenAuth?.("signin");
                   }}
-                  className="w-full rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-sm font-semibold text-white"
                 >
-                  Log In
+                  Sign in
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    onOpenAuth("signup");
+                    onOpenAuth?.("signup");
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#315BFF] py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20"
+                  className="w-full rounded-xl bg-gradient-to-r from-[#315BFF] via-[#5442FF] to-[#7047FF] py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/25"
                 >
-                  Get Started Free
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  Get started
                 </button>
               </>
             )}
