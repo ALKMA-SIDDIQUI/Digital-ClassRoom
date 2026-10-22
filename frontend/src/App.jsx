@@ -6,6 +6,7 @@ import AuthModal from "./components/auth/AuthModal";
 import ResetPasswordModal from "./components/auth/ResetPasswordModal";
 import Dashboard from "./components/dashboard/Dashboard";
 import Whiteboard from "./components/classroom/Whiteboard";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
 function ClassroomApp() {
   const { session, profile, loading, isPasswordRecovery } = useAuth();
@@ -74,12 +75,14 @@ function ClassroomApp() {
             />
           </>
         ) : (
-          <Whiteboard
-            roomId={routeRoomId}
-            initialRole={activeRole || (profile?.role === "teacher" ? "teacher" : "student")}
-            classroomName={activeRoomName || `Classroom ${routeRoomId}`}
-            onLeaveRoom={() => navigate("/dashboard")}
-          />
+          <ErrorBoundary>
+            <Whiteboard
+              roomId={routeRoomId}
+              initialRole={activeRole || (profile?.role === "teacher" ? "teacher" : "student")}
+              classroomName={activeRoomName || `Classroom ${routeRoomId}`}
+              onLeaveRoom={() => navigate("/dashboard")}
+            />
+          </ErrorBoundary>
         )
       ) : effectivePath === "/dashboard" ? (
         /* Route 2: Authenticated Dashboard (/dashboard) */
@@ -143,8 +146,10 @@ function ClassroomApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ClassroomApp />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ClassroomApp />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

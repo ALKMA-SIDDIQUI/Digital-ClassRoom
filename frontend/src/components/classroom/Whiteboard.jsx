@@ -121,9 +121,29 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
   const clientSessionIdRef = useRef(
     `sess_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`
   );
+  const fileInputRef = useRef(null);
+
+  // Teacher Moderation & Student Permissions
+  const [isChatDisabled, setIsChatDisabled] = useState(false);
+  const [isIndividuallyLocked, setIsIndividuallyLocked] = useState(false);
+  const [kickedModal, setKickedModal] = useState(null); // { reason: string }
+
+  // Unified drawing lock (global room lock OR individual student lock)
+  const isDrawingLocked = !isTeacher && (boardLocked || isIndividuallyLocked);
 
   // Collaboration State
   const [socketClientId, setSocketClientId] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [cursors, setCursors] = useState({});
+
+  // Classroom Resources (Supabase Storage)
+  const [sidebarTab, setSidebarTab] = useState("chat"); // "chat" | "participants" | "resources"
+  const [resources, setResources] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [previewModal, setPreviewModal] = useState(null);
+
   const [participants, setParticipants] = useState([
     {
       id: clientSessionIdRef.current,
@@ -134,9 +154,6 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
       isBoardLocked: false,
     },
   ]);
-  const [messages, setMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const [cursors, setCursors] = useState({});
 
   // Ensure current user is always properly reflected in participants
   useEffect(() => {
@@ -159,22 +176,6 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
       return [myObj, ...prev];
     });
   }, [user?.id, currentUsername, initialRole, isIndividuallyLocked]);
-
-  // Classroom Resources (Supabase Storage)
-  const [sidebarTab, setSidebarTab] = useState("chat"); // "chat" | "participants" | "resources"
-  const [resources, setResources] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [previewModal, setPreviewModal] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // Teacher Moderation & Student Permissions
-  const [isChatDisabled, setIsChatDisabled] = useState(false);
-  const [isIndividuallyLocked, setIsIndividuallyLocked] = useState(false);
-  const [kickedModal, setKickedModal] = useState(null); // { reason: string }
-
-  // Unified drawing lock (global room lock OR individual student lock)
-  const isDrawingLocked = !isTeacher && (boardLocked || isIndividuallyLocked);
 
   // Helper to reliably retrieve valid access token
   const getValidToken = useCallback(async () => {
@@ -239,19 +240,22 @@ export default function Whiteboard({ roomId, initialRole, classroomName, onLeave
 
           // If official teacher exists, ensure teacher is displayed in participants
           if (classroom.profiles) {
-            setParticipants((prev) => {
-              const teacherId = classroom.profiles.id;
-              const exists = prev.some((p) => (p.userId || p.id) === teacherId);
-              if (exists) return prev;
-              const teacherObj = {
-                id: teacherId,
-                userId: teacherId,
-                username: classroom.profiles.full_name || "Teacher",
-                role: "teacher",
-                isBoardLocked: false,
-              };
-              return [teacherObj, ...prev];
-            });
+            const teacherProfile = Array.isArray(classroom.profiles) ? classroom.profiles[0] : classroom.profiles;
+            const teacherId = teacherProfile?.id;
+            if (teacherId) {
+              setParticipants((prev) => {
+                const exists = prev.some((p) => (p.userId || p.id) === teacherId);
+                if (exists) return prev;
+                const teacherObj = {
+                  id: teacherId,
+                  userId: teacherId,
+                  username: teacherProfile.full_name || "Teacher",
+                  role: "teacher",
+                  isBoardLocked: false,
+                };
+                return [teacherObj, ...prev];
+              });
+            }
           }
         }
       } catch (err) {
