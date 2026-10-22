@@ -1,0 +1,24 @@
+{
+  "name": "digital-classroom-board",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digital Classroom Board - Real-time collaborative whiteboard platform with educator authority, chat, file sharing, and interactive canvas",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start",
+    "lint": "npm --prefix frontend run lint"
+  },
+  "keywords": [
+    "whiteboard",
+    "classroom",
+    "education",
+    "collaboration",
+    "socketio",
+    "react",
+    "supabase"
+  ],
+  "author": "",
+  "license": "MIT"
+}
